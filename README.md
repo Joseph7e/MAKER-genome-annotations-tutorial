@@ -1,27 +1,10 @@
 #### Running-MAKER-with-little-to-no-evidence
 Construct ab initio gene prediction using only BUSCO augustus models. Add in transcriptome for extra support
 
-my_genome=Sipuncula_Muscle.fasta
-
-###optional transcriptome
-
-my_transcriptome=good.all.orthomerged.fasta
-
-protein_evidence=/mnt/lustre/hcgs/joseph7e/databases/swiss_prot/uniprot_sprot.fasta
-
 ### Step 0: run busco with the --long option, this creates a species training model
-sbatch quality_check_genome_busco $my_genome
-path_to_species_model= 
-path_to_proteins=
-
-
-### Step 0: run Repeat Library Construction 
-
-http://weatherby.genetics.utah.edu/MAKER/wiki/index.php/Repeat_Library_Construction--Basic
-
-
-http://www.repeatmasker.org/RepeatModeler/
-
+```bash
+busco -l aves_odb10 -m genome --augustus_species chicken  -c 24 -i bAmmCau1.pri.cur.20220422.fasta -o busco-chicken-bACau --long
+```
 
 ### Step 1: Generate Generic control files, http://weatherby.genetics.utah.edu/MAKER/wiki/index.php/The_MAKER_control_files_explained
 maker -OPTS && maker -BOPTS && maker -EXE
@@ -29,15 +12,15 @@ maker -OPTS && maker -BOPTS && maker -EXE
 ### Step 2: Edit OPTS files
 ##### Line you will likely change
 ```bash
-genome=
-est= OR altest= (#EST/cDNA sequence file in fasta format from an alternate organism)
-protein= (use swissprot or a set from a closely related species fi yoou have them)
-add genome variable THESE COMMANDS DO NOT WORK WITH ABSOLUE PATHS, JUST MANUALLY EDIT THEM
-
+#est= OR altest= (#EST/cDNA sequence file in fasta format from an alternate organism)
+#add genome variable THESE COMMANDS DO NOT WORK WITH ABSOLUE PATHS, JUST MANUALLY EDIT THEM
+my_genome=Sipuncula_Muscle.fasta
+#optional transcriptome
+my_transcriptome=good.all.orthomerged.fasta
 sed -i 's/'^genome='/'genome="$my_genome"'/g' maker_opts.ctl
 #add transcriptome to est line
 sed -i 's/'^est='/'est="$my_transcriptome"'/g' maker_opts.ctl
-#add protein evidence
+#add protein evidence  (use swissprot or a set from a closely related species fi yoou have them)
 protein=/mnt/lustre/hcgs/joseph7e/databases/swiss_prot/uniprot_sprot.fasta
 #add augustus species model
 ```
@@ -63,8 +46,6 @@ Annotation of the horsefly genome, tabanid hinellus.
 #### Raw data/resources:
 1. `tabanid.hinellus.genome.scf.fasta`: The *de novo* *Tabanid hinellus* reference genome. This genome was produced with MaSuRCA using X 250 bp paired-end Illumina data and X gb of Nanopore data. FASTA format.
 
-FILTER BY TPM
-
 2. `tabanid.hinellus.combined.ORP.fasta`: A *de novo* transcriptome assembly created using the Oyster River Protocol (https://oyster-river-protocol.readthedocs.io/en/latest/) and RNAseq data from several tissues. FASTA format.
 3a. `brachycera.proteins.faa`: Full protein amino acid sequences, in FASTA format, for three other Brachycera species (closest relatives with available genomes) [NCBI](https://www.ncbi.nlm.nih.gov/genome/browse#!/eukaryotes/Brachycera ): *Drosophila melanogaster*, *Ceratitis capitata*, and *Lucilia cuprina*.
 3b. `uniprot_sprot.fasta`: Swiss-Prot protein sequences from UniProt. If you have no close relatives (or even if you do) you can add this file in as well. https://www.uniprot.org/downloads
@@ -74,6 +55,12 @@ FILTER BY TPM
 
 #### 1. *De Novo* Repeat Identification
 The first, and very important, step to genome annotation is identifying repetitive content. Existing libraries from Repbase or from internal efforts are great, but it is also important to identify repeats *de novo* from your reference genome using `RepeatModeler`. This is pretty easy to do and normally only takes a couple days using 8-12 cores.
+
+http://weatherby.genetics.utah.edu/MAKER/wiki/index.php/Repeat_Library_Construction--Basic
+
+http://www.repeatmasker.org/RepeatModeler/
+
+
 
 ```bash
 BuildDatabase -name tabanid_genome -engine tabanid.hinellus.genome.scf.fasta
