@@ -1,37 +1,12 @@
-#### Running-MAKER-with-little-to-no-evidence
-Construct ab initio gene prediction using only BUSCO augustus models. Add in transcriptome for extra support
-
-### Step 0: run busco with the --long option, this creates a species training model
-```bash
-busco -l aves_odb10 -m genome --augustus_species chicken  -c 24 -i bAmmCau1.pri.cur.20220422.fasta -o busco-chicken-bACau --long
-```
-
-### Step 1: Generate Generic control files, http://weatherby.genetics.utah.edu/MAKER/wiki/index.php/The_MAKER_control_files_explained
-maker -OPTS && maker -BOPTS && maker -EXE
-
-### Step 2: Edit OPTS files
-##### Line you will likely change
-```bash
-#est= OR altest= (#EST/cDNA sequence file in fasta format from an alternate organism)
-#add genome variable THESE COMMANDS DO NOT WORK WITH ABSOLUE PATHS, JUST MANUALLY EDIT THEM
-my_genome=Sipuncula_Muscle.fasta
-#optional transcriptome
-my_transcriptome=good.all.orthomerged.fasta
-sed -i 's/'^genome='/'genome="$my_genome"'/g' maker_opts.ctl
-#add transcriptome to est line
-sed -i 's/'^est='/'est="$my_transcriptome"'/g' maker_opts.ctl
-#add protein evidence  (use swissprot or a set from a closely related species fi yoou have them)
-protein=/mnt/lustre/hcgs/joseph7e/databases/swiss_prot/uniprot_sprot.fasta
-#add augustus species model
-```
-
-
-
 # Genome Annotation using MAKER
+*this tutorial is ever changing and was designed to annotate the horsefly genome, tabanid hinellus. 
+*It has since been updated to be more general and work with varying levels of starting data.
+*This tutorial is designed to run in MPI mode.
 
-Annotation of the horsefly genome, tabanid hinellus.
-
-*this tutorial is not finished yet
+See https://darencard.net/blog/2017-05-16-maker-genome-annotation/
+See NCBIs pipeline as well. https://www.ncbi.nlm.nih.gov/genome/annotation_euk/process/
+Also see. http://weatherby.genetics.utah.edu/MAKER/wiki/index.php/MAKER_Tutorial_for_WGS_Assembly_and_Annotation_Winter_School_2018
+Also see. https://bioinformaticsworkbook.org/dataAnalysis/GenomeAnnotation/Intro_To_Maker.html#gsc.tab=0
 
 ## Software & Data
 
@@ -43,41 +18,43 @@ Annotation of the horsefly genome, tabanid hinellus.
 5. [SNAP](http://korflab.ucdavis.edu/software.html) version 2006-07-28.
 6. [BEDtools](https://bedtools.readthedocs.io/en/latest/) version 2.17.0.
 
-#### Raw data/resources:
-1. `tabanid.hinellus.genome.scf.fasta`: The *de novo* *Tabanid hinellus* reference genome. This genome was produced with MaSuRCA using X 250 bp paired-end Illumina data and X gb of Nanopore data. FASTA format.
 
-2. `tabanid.hinellus.combined.ORP.fasta`: A *de novo* transcriptome assembly created using the Oyster River Protocol (https://oyster-river-protocol.readthedocs.io/en/latest/) and RNAseq data from several tissues. FASTA format.
-3a. `brachycera.proteins.faa`: Full protein amino acid sequences, in FASTA format, for three other Brachycera species (closest relatives with available genomes) [NCBI](https://www.ncbi.nlm.nih.gov/genome/browse#!/eukaryotes/Brachycera ): *Drosophila melanogaster*, *Ceratitis capitata*, and *Lucilia cuprina*.
-3b. `uniprot_sprot.fasta`: Swiss-Prot protein sequences from UniProt. If you have no close relatives (or even if you do) you can add this file in as well. https://www.uniprot.org/downloads
+```bash
+MY_GENOME = genome_assembly.fasta # ideally you have removed contamination from this assembly and don't have a lot of small contigs.
+MY_TRANSCRIPTOME = transcriptome_assembly.fasta # optional but recommended, also called EST in this tutorial
+MY_PROTEINS = proteome.fasta # Try uniprot_sprot.fasta
+```
 
+### Setup Step 1: Train gene models with BUSCO --long option, this will be used later
+```bash
+lineage=aves_odb10
+species=chicken
+sample=
+busco -l $lineage -m genome --augustus_species $species  -c 24 -i $GENOME -o busco-$species-$sample --long
+```
 
-## Repeat Annotation
-
-#### 1. *De Novo* Repeat Identification
+### Setup Step 2. *De Novo* Repeat Identification
 The first, and very important, step to genome annotation is identifying repetitive content. Existing libraries from Repbase or from internal efforts are great, but it is also important to identify repeats *de novo* from your reference genome using `RepeatModeler`. This is pretty easy to do and normally only takes a couple days using 8-12 cores.
 
 http://weatherby.genetics.utah.edu/MAKER/wiki/index.php/Repeat_Library_Construction--Basic
 
 http://www.repeatmasker.org/RepeatModeler/
 
-
-
 ```bash
-BuildDatabase -name tabanid_genome -engine tabanid.hinellus.genome.scf.fasta
+BuildDatabase -name genome_db -engine $MY_GENOME
 
 RepeatModeler -pa 32 #number of cores \
 -engine ncbi #optional, as ncbi is the default engine \
--database tabanid_genome 2>&1 | tee trissolcus_basalis_repeatmodeler.log
+-database genome_db 2>&1 | tee repeatmodeler.log
 ```
 
 The output from this that we will use is called `consensi.fa.classified`
 
 ###### Download RepBase data for close relative and concatenate with tabanid repeat model.
 
-RepBase
+RepBase - https://www.girinst.org/server/RepBase/index.php # you need a subscription now. NOT COOL.
 
-
-#### 2. Full Repeat Annotation
+#### Full Repeat Annotation (optional)
 Depending on the species, the *de novo* library can be fed right into MAKER. Here we do more complex repeat identification.
 
 ```
@@ -86,60 +63,83 @@ mkdir repeatMasker-tabanid_model
 RepeatMasker -pa 24 #number of cores /
 -e ncbi #engine /
 -gccalc #calculate GC content /
--lib assembly-conseni.fa.classified #concatenated consensi.fa.classified and RepBase files \
--dir repeatMasker-tabanid_model #output directory \
- tabanid.hinellus.genome.scf.fasta #assembly file
+-lib combined-conseni.fa.classified #concatenated consensi.fa.classified and RepBase files \
+-dir repeatMasker-model #output directory \
+ $MY_GENOME #assembly file
 ```
 
 Then the masked FASTA from this search can be used as input for the next search, using the `arthropoda` library from Repbase.
 
 ```bash
-mkdir repeatMasker-arthropoda_mask
+mkdir repeatMasker-output
+
+# The below command needs to be adjusted
+repeat_species=arthropoda
 
 RepeatMasker -pa 24 \
 -e ncbi \
 -gccalc \
 -a #creates an alignment files that cab be used with jbrowse \
 -s #slow search (more sensitive, but slower)
--species arthropoda #species name must be in the NCBI Taxonomy Database\
--dir arthropoda_mask #output directory\
-tabanid.hinellus.genome.scf.fasta #assembly file
+-species $repeat_species #species name must be in the NCBI Taxonomy Database\
+-dir repeatMasker-output #output directory\
+$MY_GENOME #assembly file
 ```
 
-Results from each round must be analyzed together to produce the final repeat annotation
+Combine all data to produce the final repeat annotations
 ```bash
-mkdir RepeatMasker-combined
-gunzip *.cat.gz arthropoda_mask/*.cat.gz 
-cat *.cat arthropoda_mask/*.cat.gz
-  > pilon4_tb_full_mask.cat
+mkdir full_mask
+gunzip repeatMasker-output/*.cat.gz 
+cat repeatMasker-output/*.cat.gz> full_mask/full_mask.cat
 cd full_mask
-ProcessRepeats -species arthropoda pilon4_tb_full_mask.cat
+ProcessRepeats -species arthropoda full_mask.cat
 ```
 
-Finally, in order to feed these repeats into MAKER properly, we must separate out the complex repeats (more info on this below).
+In order to feed these repeats into MAKER properly, we must separate out the complex repeats (more info on this below).
 
 ```bash
 # create GFF3
-rmOutToGFF3.pl full_mask/pilon4_tb_full_mask.out > full_mask/pilon4_tb_full_mask.out.gff3
+rmOutToGFF3.pl full_mask/full_mask.out > full_mask/full_mask.out.gff3
 # isolate complex repeats
-grep -v -e "Satellite" -e ")n" -e "-rich" pilon4_tb_full_mask.out.gff3 \
+grep -v -e "Satellite" -e ")n" -e "-rich" full_mask.out.gff3 \
   > pilon4_tb_full_mask.out.complex.gff3
 # reformat to work with MAKER
-cat pilon4_tb_full_mask.out.complex.gff3 | \
+cat full_mask.out.complex.gff3 | \
   perl -ane '$id; if(!/^\#/){@F = split(/\t/, $_); chomp $F[-1];$id++; $F[-1] .= "\;ID=$id"; $_ = join("\t", @F)."\n"} print $_' \
-  > pilon4_tb_full_mask.out.complex.reformat.gff3
+  > full_mask.out.complex.reformat.gff3
 ```
 Now we have the prerequesite data for running MAKER.
 
-#### 3. Initial MAKER Analysis
+```bash
+complex_repeats=full_mask.out.complex.reformat.gff3
+# note: maker will do the simple repeats
+```
+
+## Initial MAKER Analysis
 
 MAKER is pretty easy to get going and relies on properly completed control files. These can be generated by issuing the command `maker -CTL`. The only control file we will be the `maker_opts.ctl` file. In this first round, we will obviously providing the data files for the repeat annotation (`rm_gff`), the transcriptome assembly (`est`), and for the other Squamate protein sequences (`protein`). We will also set the `model_org` to 'simple' so that only simple repeats are annotated (along with `RepeatRunner`). Here is the full control file for reference. 
+
+### Generate Generic control files, http://weatherby.genetics.utah.edu/MAKER/wiki/index.php/The_MAKER_control_files_explained
+maker -OPTS && maker -BOPTS && maker -EXE
+
+
+### Edit OPTS files with starting data
+```bash
+#add genome variable THESE COMMANDS DO NOT WORK WITH ABSOLUE PATHS, JUST MANUALLY EDIT THEM
+sed -i 's/'^genome='/'genome="$MY_GENOME"'/g' maker_opts.ctl
+#add transcriptome to est line
+sed -i 's/'^est='/'est="$my_transcriptome"'/g' maker_opts.ctl
+#add protein evidence  (use swissprot or a set from a closely related species fi yoou have them)
+protein=$MY_PROTEINS
+```
+
+
 
 ```bash
 cat round1_maker_opts.ctl
 
 #-----Genome (these are always required)
-genome=/home/castoelab/Desktop/daren/boa_annotation/Boa_constrictor_SGA_7C_scaffolds.fa #genome sequence (fasta file or fasta embeded in GFF3 file)
+genome=*ABSOLUTE_PATH_TO_GENOME* #genome sequence (fasta file or fasta embeded in GFF3 file)
 organism_type=eukaryotic #eukaryotic or prokaryotic. Default is eukaryotic
 
 #-----Re-annotation Using MAKER Derived GFF3
@@ -153,13 +153,13 @@ pred_pass=0 #use ab-initio predictions in maker_gff: 1 = yes, 0 = no
 other_pass=0 #passthrough anyything else in maker_gff: 1 = yes, 0 = no
 
 #-----EST Evidence (for best results provide a file for at least one)
-est=/home/castoelab/Desktop/daren/boa_annotation/Boa_Trinity_15May2015.Txome_assembly.fasta #set of ESTs or assembled mRNA-seq in fasta format
+est=*ABSOLUTE_PATH_TO_TRANSCRIPTOME* #set of ESTs or assembled mRNA-seq in fasta format
 altest= #EST/cDNA sequence file in fasta format from an alternate organism
 est_gff= #aligned ESTs or mRNA-seq from an external GFF3 file
 altest_gff= #aligned ESTs from a closly relate species in GFF3 format
 
 #-----Protein Homology Evidence (for best results provide a file for at least one)
-protein=/home/castoelab/Desktop/daren/boa_annotation/protein_files_other_squamates/Anolis_carolinensis.AnoCar2.0.pep.all.fa,/home/castoelab/Desktop/daren/boa_annotation/protein_files_other_squamates/GCF_000186305.1_Python_molurus_bivittatus-5.0.2_protein.faa,/home/castoelab/Desktop/daren/boa_annotation/protein_files_other_squamates/GCF_001077635.1_Thamnophis_sirtalis-6.0_protein.faa  #protein sequence file in fasta format (i.e. from mutiple oransisms)
+protein=*ABSOLUTE_PATH_TO_PROTEINS* #protein sequence file in fasta format (i.e. from mutiple oransisms)
 protein_gff=  #aligned protein homology evidence from an external GFF3 file
 
 #-----Repeat Masking (leave values blank to skip repeat masking)
@@ -219,9 +219,10 @@ Specifying the GFF3 annotation file for the annotated complex repeats (`rm_gff`)
 Two other important settings are `est2genome` and `protein2genome`, which are set to 1 so that MAKER gene predictions are based on the aligned transcripts and proteins (the only form of evidence we currently have). I also construct the MAKER command in a `Bash` script so it is easy to run and keep track of.
 
 ```bash
-cat round1_run_maker.sh
 
-mpiexec -n 12 maker -base Bcon_rnd1 round1_maker_opts.ctl maker_bopts.ctl maker_exe.ctl
+cat round1_run_maker.sh
+mpiexec -n 12 maker -base maker_rnd1 round1_maker_opts.ctl maker_bopts.ctl maker_exe.ctl
+
 ```
 
 Then we run MAKER.
@@ -287,11 +288,10 @@ There are some important things to note based on this approach. First is that yo
 While we've only provided sequences from regions likely to contain genes, we've totally eliminated any existing annotation data about the starts/stops of gene elements. Augustus would normally use this as part of the training process. However, BUSCO will essentially do a reannotation of these regions using BLAST and built-in HMMs for a set of conserved genes (hundreds to thousands). This has the effect of recreating some version of our gene models for these conserved genes. We then leverage the internal training that BUSCO can perform (the `--long` argument) to optimize the HMM search model to train Augustus and produce a trained HMM for MAKER. Here is the command we use to perform the Augustus training inside BUSCO.
 
 ```bash
-BUSCO.py -i Bcon_rnd2.all.maker.transcripts1000.fasta  -o Bcon_rnd1_maker -l tetrapoda_odb9/ \
-  -m genome -c 8 --long -sp human -z --augustus_parameters='--progress=true'
+# See the beginning of the tutorial to run BUSCO
 ```
 
-In this case, we are using the Tetrapoda set of conserved genes (N = 3950 genes), so BUSCO will try to identify those gene using BLAST and an initial HMM model for each that comes stocked within BUSCO. We specify the `-m genome` option since we are giving BUSCO regions that include more than just transcripts. The initial HMM model we'll use is the human one (`-sp human`), which is a reasonably close species. Finally, the `--long` option tells BUSCO to use the initial gene models it creates to optimize the HMM settings of the raw human HMM, thus training it for our use on *Boa*. We can have this run in parallel on several cores, but it will still likely take days, so be patient.
+In this case, we are using a set of conserved genes which BUSCO will try to identify those gene using BLAST and an initial HMM model for each that comes stocked within BUSCO. We specify the `-m genome` option since we are giving BUSCO regions that include more than just transcripts. The initial HMM model we'll use is the human one (`-sp human`), which is a reasonably close species. Finally, the `--long` option tells BUSCO to use the initial gene models it creates to optimize the HMM settings of the raw human HMM, thus training it for our use on *Boa*. We can have this run in parallel on several cores, but it will still likely take days, so be patient.
 
 Once BUSCO is complete, it will give you an idea of how complete your annotation is (though be cautious, because we haven't filtered away known alternative transcripts that will be binned as duplicates). We need to do some post-processing of the HMM models to get them ready for MAKER. First, we'll rename the files within `run_Bcon_rnd1_maker/augustus_output/retraining_paramters`.
 
