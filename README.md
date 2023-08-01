@@ -3,10 +3,11 @@
 *It has since been updated to be more general and work with varying levels of starting data.
 *This tutorial is designed to run in MPI mode.
 
-See https://darencard.net/blog/2017-05-16-maker-genome-annotation/  
-See NCBIs pipeline as well. https://www.ncbi.nlm.nih.gov/genome/annotation_euk/process/  
-Also see. http://weatherby.genetics.utah.edu/MAKER/wiki/index.php/MAKER_Tutorial_for_WGS_Assembly_and_Annotation_Winter_School_2018  
-Also see. https://bioinformaticsworkbook.org/dataAnalysis/GenomeAnnotation/Intro_To_Maker.html#gsc.tab=0  
+Other tutorials and resources used to make this tutorial  
+https://darencard.net/blog/2017-05-16-maker-genome-annotation/  
+https://www.ncbi.nlm.nih.gov/genome/annotation_euk/process/  
+http://weatherby.genetics.utah.edu/MAKER/wiki/index.php/MAKER_Tutorial_for_WGS_Assembly_and_Annotation_Winter_School_2018  
+https://bioinformaticsworkbook.org/dataAnalysis/GenomeAnnotation/Intro_To_Maker.html#gsc.tab=0  
 
 ## Software & Data
 
