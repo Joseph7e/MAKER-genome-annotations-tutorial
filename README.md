@@ -103,7 +103,7 @@ In order to feed these repeats into MAKER properly, we must separate out the com
 rmOutToGFF3.pl full_mask/full_mask.out > full_mask/full_mask.out.gff3
 # isolate complex repeats
 grep -v -e "Satellite" -e ")n" -e "-rich" full_mask.out.gff3 \
-  > pilon4_tb_full_mask.out.complex.gff3
+  > full_mask.out.complex.gff3
 # reformat to work with MAKER
 cat full_mask.out.complex.gff3 | \
   perl -ane '$id; if(!/^\#/){@F = split(/\t/, $_); chomp $F[-1];$id++; $F[-1] .= "\;ID=$id"; $_ = join("\t", @F)."\n"} print $_' \
